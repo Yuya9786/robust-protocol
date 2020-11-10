@@ -6,24 +6,108 @@ import (
 	"flag"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"net"
+	"os"
+
+	//"os"
 	"sync"
 	"time"
 )
-
-type Mypro struct {
-	Type int8
-	Length int16
-	Space int8
-	FileIdent FileIdent
-	Data []byte		// <= MTU - 20 - 8 - 8
-}
 
 type FileIdent struct {
 	Fileno int16
 	Offset int16
 }
+
+type Header struct {
+	Type int8
+	Length int16
+	Space int8
+	FileIdent FileIdent
+}
+
+type Packet struct {
+	Header Header
+	Data []byte		// <= MTU - 20 - 8 - 8
+}
+
+
+func (tp *Packet) Serialize() ([]byte, error) {
+	buf := bytes.NewBuffer(make([]byte, 0))
+	// 構造体に可変長のフィールドがあるとbinary.Write/Readはうまく動かないらしい
+	// tp.Header/Dataに分けて書き込む
+	if err := binary.Write(buf, binary.BigEndian, tp.Header); err != nil {
+		return nil, fmt.Errorf("failed to write: %v", err)
+	}
+	if err := binary.Write(buf, binary.BigEndian, tp.Data); err != nil {
+		return nil, fmt.Errorf("failed to write: %v", err)
+	}
+
+	return buf.Bytes(), nil
+}
+
+func (tp *Packet) Deserialize(buf []byte) error {
+	var header Header
+	reader := bytes.NewReader(buf)
+	if err := binary.Read(reader, binary.BigEndian, &header); err != nil {
+		return err
+	}
+	tp.Header = header
+	tp.Data = buf[8:]
+	return nil
+}
+
+type BuilderFromPacket struct {
+	DataSegments map[FileIdent][]byte
+	CurrentReceivedFileSize map[int16]int
+}
+
+func (b *BuilderFromPacket) Set(tp *Packet) {
+	ident := tp.Header.FileIdent
+	if _, ok := b.DataSegments[ident]; ok {
+		return
+	}
+	b.DataSegments[ident] = tp.Data
+	fileNum := ident.Fileno
+	if _, ok := b.CurrentReceivedFileSize[fileNum]; !ok {
+		b.CurrentReceivedFileSize[fileNum] = 0
+	}
+	b.CurrentReceivedFileSize[fileNum] += int(tp.Header.Length)
+	if b.CurrentReceivedFileSize[fileNum] >= filesize {
+		b.WriteFile(ident.Fileno)
+	}
+}
+
+func (b *BuilderFromPacket) WriteFile(fileNumber int16) error {
+	fileName := fmt.Sprintf("data/%d.txt", fileNumber)
+	file, err := os.OpenFile(fileName, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0666)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	data := make([]byte, 0, 1500)
+	for i := 0;;i++ {
+		ident := FileIdent{
+			Fileno: fileNumber,
+			Offset: int16(i),
+		}
+		dataSegment, ok := b.DataSegments[ident]
+		if !ok {
+			break
+		}
+		for _, v := range dataSegment {
+			data = append(data, v)
+		}
+	}
+
+	fmt.Println("write data on a file: ", fileNumber, len(data))
+
+	file.Write(data)
+
+	return nil
+}
+
 
 type RetransCtrl struct {
 	mu sync.Mutex
@@ -49,6 +133,8 @@ func (ctrl *RetransCtrl) Ack(ident FileIdent) {
 	ctrl.mu.Unlock()
 }
 
+
+
 const (
 	MTU = 1500
 	filesize = 100_000
@@ -69,33 +155,50 @@ func main() {
 }
 
 func server() {
-	srcaddr, err := net.ResolveUDPAddr("udp", "0.0.0.0:8888")
+	start := time.Now()
+	addr, err := net.ResolveUDPAddr("udp", "0.0.0.0:8888")
 	if err != nil {
 		panic(err)
 	}
 
-	conn, err := net.ListenUDP("udp", srcaddr)
+	conn, err := net.ListenUDP("udp", addr)
 	if err != nil {
 		panic(err)
 	}
 
+	bfp := &BuilderFromPacket{
+		DataSegments:            make(map[FileIdent][]byte),
+		CurrentReceivedFileSize: make(map[int16]int),
+	}
 	for {
-		handleClient(conn)
+		end := time.Now()
+		if end.Sub(start).Milliseconds() >= 60_000 {
+			return
+		}
+
+		bfp.handleClient(conn)
 	}
 }
 
-func handleClient(conn *net.UDPConn) {
-	buf := make([]byte, 512, 512)
+func (bfp *BuilderFromPacket) handleClient(conn *net.UDPConn) {
+	buf := make([]byte, 1500)
 
-	n, addr, err := conn.ReadFromUDP(buf[0:])
+	n, err := conn.Read(buf[0:])
 	if err != nil {
 		panic(err)
 	}
 
-	fmt.Println(string(buf[0:n]))
+	var packet Packet
+	packet.Deserialize(buf[0:n])
+	fmt.Println("fileNum: ", packet.Header.FileIdent.Fileno, "offset: ", packet.Header.FileIdent.Offset)
+	//fmt.Println("packet: ", packet)
 
-	daytime := time.Now().String()
-	conn.WriteToUDP([]byte(daytime), addr)
+
+	bfp.Set(&packet)
+
+
+	//daytime := time.Now().String()
+	// conn.WriteToUDP([]byte(daytime), addr)
 }
 
 func client() {
@@ -104,10 +207,10 @@ func client() {
 		v: make(map[FileIdent]bool),
 	}
 
-	ch1 := make(chan []byte, 100)
+	ch1 := make(chan []byte, 1000)
 	var i int16
-	for i=0; i<100; i++ {
-		go readFile(ch1, "sampleA.txt", i, &retransCtrl)
+	for i=0; i<3; i++ {
+		go readFile(ch1, "sample.txt", i, &retransCtrl)
 	}
 
 	udpAddr, err := net.ResolveUDPAddr("udp", "localhost:8888")
@@ -120,11 +223,12 @@ func client() {
 	}
 	go send(ch1, conn, &retransCtrl)
 
-	go receive(conn, &retransCtrl)
+	// go receive(conn, &retransCtrl)
 
 	for {
 		end := time.Now()
 		if end.Sub(start).Milliseconds() >= 60_000 {
+			fmt.Println("Time up")
 			return
 		}
 		time.Sleep(2)
@@ -133,35 +237,40 @@ func client() {
 }
 
 func readFile(ch chan []byte, filename string, number int16, retransCtrl *RetransCtrl) {
+	fmt.Println("readfile")
 	data, err := ioutil.ReadFile(filename)
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
-	for i:=0; i < len(data); i += (packet_data_size) {
-		var data_size int16
+	var j int16 = 0
+	for i:=0; i < len(data); i += packet_data_size {
+		var dataSize int16
 		if i + packet_data_size > len(data) {
-			data_size = int16(len(data) - i)
+			dataSize = int16(len(data) - i)
 		} else {
-			data_size = packet_data_size
+			dataSize = packet_data_size
 		}
-		packet_data := data[i:i+int(data_size)]
+		packetData := data[i:i+int(dataSize)]
 		fileIdent := FileIdent{
 			Fileno: number,
-			Offset: int16(i),
+			Offset: j,
 		}
-		myprotcol_packet := Mypro {
-			Type: 0,
-			Length: data_size,
-			Space: 0,
-			FileIdent: fileIdent,
-			Data: packet_data,
+		packet := &Packet {
+			Header: Header {
+				Type: 0,
+				Length: dataSize,
+				Space: 0,
+				FileIdent: fileIdent,
+			},
+			Data: packetData,
 		}
 		retransCtrl.Set(fileIdent)
-
-		buf := bytes.NewBuffer(make([]byte, 0))
-		binary.Write(buf, binary.BigEndian, &myprotcol_packet)
-		data := buf.Bytes()
-		fmt.Printf("%v\n", buf)
+		// fmt.Println(packet)
+		data, err := packet.Serialize()
+		if err != nil {
+			panic(err)
+		}
+		j++
 		ch <- data
 	}
 }
@@ -170,7 +279,7 @@ func readFile(ch chan []byte, filename string, number int16, retransCtrl *Retran
 func send(ch chan []byte, conn *net.UDPConn, retransCtrl *RetransCtrl) {
 	for {
 		packetData := <- ch
-		//fmt.Println(packetData)
+		fmt.Println(len(packetData))
 		var fileNo, offSet int16
 		buf := bytes.NewReader(packetData[4:6])
 		binary.Read(buf, binary.BigEndian, &fileNo)
@@ -185,7 +294,7 @@ func send(ch chan []byte, conn *net.UDPConn, retransCtrl *RetransCtrl) {
 			continue
 		}
 
-		//fmt.Printf("sendFile Number: %v, Offset: %v", packetData[4:6], packetData[6:8])
+		fmt.Printf("sendFile Number: %v, Offset: %v\n", packetData[4:6], packetData[6:8])
 		conn.Write(packetData)
 		ch <- packetData
 	}

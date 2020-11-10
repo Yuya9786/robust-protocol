@@ -43,9 +43,10 @@
     <option name="version" value="3" />
   </component>
   <component name="WindowStateProjectService">
-    <state x="48" y="183" width="670" height="676" key="search.everywhere.popup" timestamp="1604759545081">
-      <screen x="0" y="23" width="1440" height="836" />
+    <state x="48" y="172" width="670" height="728" key="search.everywhere.popup" timestamp="1605024788402">
+      <screen x="0" y="0" width="1440" height="900" />
     </state>
+    <state x="48" y="172" width="670" height="728" key="search.everywhere.popup/0.0.1440.900@0.0.1440.900" timestamp="1605024788402" />
     <state x="48" y="183" width="670" height="676" key="search.everywhere.popup/0.23.1440.836@0.23.1440.836" timestamp="1604759545081" />
   </component>
 </project>

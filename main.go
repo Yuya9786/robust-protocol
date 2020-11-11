@@ -150,8 +150,6 @@ func main() {
 	} else {
 		client()
 	}
-
-
 }
 
 func server() {
@@ -193,16 +191,20 @@ func (bfp *BuilderFromPacket) handleClient(conn *net.UDPConn, ch chan []byte) {
 	//	panic(err)
 	//}
 
+	udpAddr, err := net.ResolveUDPAddr("udp", "localhost:9999")
+	if err != nil {
+		panic(err)
+	}
 	for {
 		buf := <-ch
 
 		var packet Packet
 		packet.Deserialize(buf)
-		fmt.Println("fileNum: ", packet.Header.FileIdent.Fileno, "offset: ", packet.Header.FileIdent.Offset)
+		//fmt.Println("fileNum: ", packet.Header.FileIdent.Fileno, "offset: ", packet.Header.FileIdent.Offset)
 
 		bfp.Set(&packet)
 
-		Ack(conn, &packet)
+		ack(conn, &packet, udpAddr)
 	}
 }
 
@@ -218,17 +220,23 @@ func client() {
 		go readFile(ch1, "sample.txt", i, &retransCtrl)
 	}
 
-	udpAddr, err := net.ResolveUDPAddr("udp", "localhost:8888")
+	dstAddr, err := net.ResolveUDPAddr("udp", "localhost:8888")
 	if err != nil {
 		panic(err)
 	}
-	conn, err := net.DialUDP("udp", nil, udpAddr)
+	srcAddr, err := net.ResolveUDPAddr("udp", "localhost:9999")
+	if err != nil {
+		panic(err)
+	}
+	conn, err := net.DialUDP("udp", srcAddr, dstAddr)
 	if err != nil {
 		panic(err)
 	}
 	go send(ch1, conn, &retransCtrl)
 
-	// go receive(conn, &retransCtrl)
+	ch2 := make(chan []byte, 1000)
+	go receive(conn, ch2)
+	go receiveAck(ch2, &retransCtrl)
 
 	for {
 		end := time.Now()
@@ -242,7 +250,6 @@ func client() {
 }
 
 func readFile(ch chan []byte, filename string, number int16, retransCtrl *RetransCtrl) {
-	fmt.Println("readfile")
 	data, err := ioutil.ReadFile(filename)
 	if err != nil {
 		panic(err)
@@ -270,7 +277,6 @@ func readFile(ch chan []byte, filename string, number int16, retransCtrl *Retran
 			Data: packetData,
 		}
 		retransCtrl.Set(fileIdent)
-		// fmt.Println(packet)
 		data, err := packet.Serialize()
 		if err != nil {
 			panic(err)
@@ -283,7 +289,6 @@ func readFile(ch chan []byte, filename string, number int16, retransCtrl *Retran
 func send(ch chan []byte, conn *net.UDPConn, retransCtrl *RetransCtrl) {
 	for {
 		packetData := <- ch
-		fmt.Println(len(packetData))
 		var fileNo, offSet int16
 		buf := bytes.NewReader(packetData[4:6])
 		binary.Read(buf, binary.BigEndian, &fileNo)
@@ -298,7 +303,7 @@ func send(ch chan []byte, conn *net.UDPConn, retransCtrl *RetransCtrl) {
 			continue
 		}
 
-		fmt.Printf("sendFile Number: %v, Offset: %v\n", packetData[4:6], packetData[6:8])
+		//fmt.Printf("sendFile Number: %v, Offset: %v\n", packetData[4:6], packetData[6:8])
 		conn.Write(packetData)
 		ch <- packetData
 	}
@@ -312,32 +317,32 @@ func receive(conn *net.UDPConn, ch chan []byte) {
 		if err != nil {
 			panic(err)
 		}
-
+		fmt.Println("receive ")
 		ch <- buf[0:n]
 	}
 }
 
-func receiveAck(conn *net.UDPConn, retransctrl *RetransCtrl) {
+func receiveAck(ch chan []byte, retransctrl *RetransCtrl) {
 	for {
-		buf := make([]byte, 1500, 1500)
-		conn.ReadFromUDP(buf[0:])
+		buf := <-ch
+		fmt.Println(buf)
 		if buf[0] != byte(1) {
 			return
 		}
-		var fileNo, offSet int16
-		data := bytes.NewReader(buf[4:6])
-		binary.Read(data, binary.BigEndian, &fileNo)
-		data = bytes.NewReader(buf[6:8])
-		binary.Read(data, binary.BigEndian, &offSet)
-		fileIdent := FileIdent{
-			Fileno: fileNo,
-			Offset: offSet,
-		}
-		retransctrl.Ack(fileIdent)
+		//var fileNo, offSet int16
+		//data := bytes.NewReader(buf[4:6])
+		//binary.Read(data, binary.BigEndian, &fileNo)
+		//data = bytes.NewReader(buf[6:8])
+		//binary.Read(data, binary.BigEndian, &offSet)
+		//fileIdent := FileIdent{
+		//	Fileno: fileNo,
+		//	Offset: offSet,
+		//}
+		//retransctrl.Ack(fileIdent)
 	}
 }
 
-func Ack(conn *net.UDPConn, receivedPacket *Packet) {
+func ack(conn *net.UDPConn, receivedPacket *Packet, udpAddr *net.UDPAddr) {
 	ident := receivedPacket.Header.FileIdent
 	p := Packet{
 		Header: Header{
@@ -356,5 +361,9 @@ func Ack(conn *net.UDPConn, receivedPacket *Packet) {
 	if err != nil {
 		panic("serialization error")
 	}
-	conn.Write(data)
+	fmt.Println("send Ack ", data)
+	_, err = conn.WriteToUDP(data, udpAddr)
+	if err != nil {
+		panic(err)
+	}
 }

@@ -8,8 +8,6 @@ import (
 	"io/ioutil"
 	"net"
 	"os"
-
-	//"os"
 	"sync"
 	"time"
 )
@@ -32,30 +30,31 @@ type Packet struct {
 }
 
 
-func (tp *Packet) Serialize() ([]byte, error) {
+func (p *Packet) Serialize() ([]byte, error) {
 	buf := bytes.NewBuffer(make([]byte, 0))
 	// 構造体に可変長のフィールドがあるとbinary.Write/Readはうまく動かないらしい
 	// tp.Header/Dataに分けて書き込む
-	if err := binary.Write(buf, binary.BigEndian, tp.Header); err != nil {
+	if err := binary.Write(buf, binary.BigEndian, p.Header); err != nil {
 		return nil, fmt.Errorf("failed to write: %v", err)
 	}
-	if err := binary.Write(buf, binary.BigEndian, tp.Data); err != nil {
+	if err := binary.Write(buf, binary.BigEndian, p.Data); err != nil {
 		return nil, fmt.Errorf("failed to write: %v", err)
 	}
 
 	return buf.Bytes(), nil
 }
 
-func (tp *Packet) Deserialize(buf []byte) error {
+func (p *Packet) Deserialize(buf []byte) error {
 	var header Header
 	reader := bytes.NewReader(buf)
 	if err := binary.Read(reader, binary.BigEndian, &header); err != nil {
 		return err
 	}
-	tp.Header = header
-	tp.Data = buf[8:]
+	p.Header = header
+	p.Data = buf[8:]
 	return nil
 }
+
 
 type BuilderFromPacket struct {
 	DataSegments map[FileIdent][]byte
@@ -107,6 +106,7 @@ func (b *BuilderFromPacket) WriteFile(fileNumber int16) error {
 
 	return nil
 }
+
 
 
 type RetransCtrl struct {
@@ -166,39 +166,44 @@ func server() {
 		panic(err)
 	}
 
+	ch := make(chan []byte, 1000)
+
+	go receive(conn, ch)
+
 	bfp := &BuilderFromPacket{
 		DataSegments:            make(map[FileIdent][]byte),
 		CurrentReceivedFileSize: make(map[int16]int),
 	}
+
+	go bfp.handleClient(conn, ch)
+
 	for {
 		end := time.Now()
 		if end.Sub(start).Milliseconds() >= 60_000 {
 			return
 		}
-
-		bfp.handleClient(conn)
 	}
 }
 
-func (bfp *BuilderFromPacket) handleClient(conn *net.UDPConn) {
-	buf := make([]byte, 1500)
+func (bfp *BuilderFromPacket) handleClient(conn *net.UDPConn, ch chan []byte) {
+	//buf := make([]byte, 1500)
+	//
+	//n, err := conn.Read(buf[0:])
+	//if err != nil {
+	//	panic(err)
+	//}
 
-	n, err := conn.Read(buf[0:])
-	if err != nil {
-		panic(err)
+	for {
+		buf := <-ch
+
+		var packet Packet
+		packet.Deserialize(buf)
+		fmt.Println("fileNum: ", packet.Header.FileIdent.Fileno, "offset: ", packet.Header.FileIdent.Offset)
+
+		bfp.Set(&packet)
+
+		Ack(conn, &packet)
 	}
-
-	var packet Packet
-	packet.Deserialize(buf[0:n])
-	fmt.Println("fileNum: ", packet.Header.FileIdent.Fileno, "offset: ", packet.Header.FileIdent.Offset)
-	//fmt.Println("packet: ", packet)
-
-
-	bfp.Set(&packet)
-
-
-	//daytime := time.Now().String()
-	// conn.WriteToUDP([]byte(daytime), addr)
 }
 
 func client() {
@@ -207,7 +212,7 @@ func client() {
 		v: make(map[FileIdent]bool),
 	}
 
-	ch1 := make(chan []byte, 1000)
+	ch1 := make(chan []byte, 1000)	// チャネルが短いとうまく動かない場合あり
 	var i int16
 	for i=0; i<3; i++ {
 		go readFile(ch1, "sample.txt", i, &retransCtrl)
@@ -275,7 +280,6 @@ func readFile(ch chan []byte, filename string, number int16, retransCtrl *Retran
 	}
 }
 
-
 func send(ch chan []byte, conn *net.UDPConn, retransCtrl *RetransCtrl) {
 	for {
 		packetData := <- ch
@@ -300,7 +304,20 @@ func send(ch chan []byte, conn *net.UDPConn, retransCtrl *RetransCtrl) {
 	}
 }
 
-func receive(conn *net.UDPConn, retransctrl *RetransCtrl) {
+func receive(conn *net.UDPConn, ch chan []byte) {
+	for {
+		buf := make([]byte, 1500)
+
+		n, err := conn.Read(buf[0:])
+		if err != nil {
+			panic(err)
+		}
+
+		ch <- buf[0:n]
+	}
+}
+
+func receiveAck(conn *net.UDPConn, retransctrl *RetransCtrl) {
 	for {
 		buf := make([]byte, 1500, 1500)
 		conn.ReadFromUDP(buf[0:])
@@ -318,4 +335,26 @@ func receive(conn *net.UDPConn, retransctrl *RetransCtrl) {
 		}
 		retransctrl.Ack(fileIdent)
 	}
+}
+
+func Ack(conn *net.UDPConn, receivedPacket *Packet) {
+	ident := receivedPacket.Header.FileIdent
+	p := Packet{
+		Header: Header{
+			Type:      1,
+			Length:    0,
+			Space:     0,
+			FileIdent: FileIdent{
+				Fileno: ident.Fileno,
+				Offset: ident.Offset,
+			},
+		},
+		Data:   nil,
+	}
+
+	data, err := p.Serialize()
+	if err != nil {
+		panic("serialization error")
+	}
+	conn.Write(data)
 }

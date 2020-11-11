@@ -78,7 +78,7 @@ func (b *BuilderFromPacket) Set(tp *Packet) {
 }
 
 func (b *BuilderFromPacket) WriteFile(fileNumber int16) error {
-	fileName := fmt.Sprintf("data/%d.txt", fileNumber)
+	fileName := fmt.Sprintf("data2/data%d", fileNumber)
 	file, err := os.OpenFile(fileName, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0666)
 	if err != nil {
 		return err
@@ -137,7 +137,7 @@ func (ctrl *RetransCtrl) Ack(ident FileIdent) {
 
 const (
 	MTU = 1500
-	filesize = 100_000
+	filesize = 102400
 	packet_data_size = MTU - 20 - 8 - 8
 )
 
@@ -164,7 +164,7 @@ func server() {
 		panic(err)
 	}
 
-	ch := make(chan []byte, 1000)
+	ch := make(chan []byte, 1500)
 
 	go receive(conn, ch)
 
@@ -214,11 +214,9 @@ func client() {
 		v: make(map[FileIdent]bool),
 	}
 
-	ch1 := make(chan []byte, 1000)	// チャネルが短いとうまく動かない場合あり
-	var i int16
-	for i=0; i<3; i++ {
-		go readFile(ch1, "sample.txt", i, &retransCtrl)
-	}
+	ch1 := make(chan []byte, 70000)	// チャネルが短いとうまく動かない場合あり
+
+	go readFile(ch1, &retransCtrl)
 
 	dstAddr, err := net.ResolveUDPAddr("udp", "localhost:8888")
 	if err != nil {
@@ -234,7 +232,7 @@ func client() {
 	}
 	go send(ch1, conn, &retransCtrl)
 
-	ch2 := make(chan []byte, 1000)
+	ch2 := make(chan []byte, 2000)
 	go receive(conn, ch2)
 	go receiveAck(ch2, &retransCtrl)
 
@@ -249,40 +247,45 @@ func client() {
 
 }
 
-func readFile(ch chan []byte, filename string, number int16, retransCtrl *RetransCtrl) {
-	data, err := ioutil.ReadFile(filename)
-	if err != nil {
-		panic(err)
-	}
-	var j int16 = 0
-	for i:=0; i < len(data); i += packet_data_size {
-		var dataSize int16
-		if i + packet_data_size > len(data) {
-			dataSize = int16(len(data) - i)
-		} else {
-			dataSize = packet_data_size
-		}
-		packetData := data[i:i+int(dataSize)]
-		fileIdent := FileIdent{
-			Fileno: number,
-			Offset: j,
-		}
-		packet := &Packet {
-			Header: Header {
-				Type: 0,
-				Length: dataSize,
-				Space: 0,
-				FileIdent: fileIdent,
-			},
-			Data: packetData,
-		}
-		retransCtrl.Set(fileIdent)
-		data, err := packet.Serialize()
+func readFile(ch chan []byte, retransCtrl *RetransCtrl) {
+	for i:=0; i<1000; i++ {
+		fmt.Printf("read data%d\n", i)
+		fileName := fmt.Sprintf("data/data%d", i)
+		data, err := ioutil.ReadFile(fileName)
 		if err != nil {
 			panic(err)
 		}
-		j++
-		ch <- data
+		var j int16 = 0
+		for k := 0; k < len(data); k += packet_data_size {
+			var dataSize int16
+			if k+packet_data_size > len(data) {
+				dataSize = int16(len(data) - k)
+			} else {
+				dataSize = packet_data_size
+			}
+			packetData := data[k : k+int(dataSize)]
+			fileIdent := FileIdent{
+				Fileno: int16(i),
+				Offset: j,
+			}
+			packet := &Packet{
+				Header: Header{
+					Type:      0,
+					Length:    dataSize,
+					Space:     0,
+					FileIdent: fileIdent,
+				},
+				Data: packetData,
+			}
+			retransCtrl.Set(fileIdent)
+			data, err := packet.Serialize()
+			if err != nil {
+				panic(err)
+			}
+			j++
+			ch <- data
+		}
+
 	}
 }
 
@@ -324,7 +327,7 @@ func receive(conn *net.UDPConn, ch chan []byte) {
 func receiveAck(ch chan []byte, retransctrl *RetransCtrl) {
 	for {
 		buf := <-ch
-		fmt.Println(buf)
+		//fmt.Println(buf)
 		if buf[0] != byte(1) {
 			return
 		}

@@ -317,7 +317,6 @@ func receive(conn *net.UDPConn, ch chan []byte) {
 		if err != nil {
 			panic(err)
 		}
-		fmt.Println("receive ")
 		ch <- buf[0:n]
 	}
 }
@@ -329,16 +328,16 @@ func receiveAck(ch chan []byte, retransctrl *RetransCtrl) {
 		if buf[0] != byte(1) {
 			return
 		}
-		//var fileNo, offSet int16
-		//data := bytes.NewReader(buf[4:6])
-		//binary.Read(data, binary.BigEndian, &fileNo)
-		//data = bytes.NewReader(buf[6:8])
-		//binary.Read(data, binary.BigEndian, &offSet)
-		//fileIdent := FileIdent{
-		//	Fileno: fileNo,
-		//	Offset: offSet,
-		//}
-		//retransctrl.Ack(fileIdent)
+		var fileNo, offSet int16
+		data := bytes.NewReader(buf[4:6])
+		binary.Read(data, binary.BigEndian, &fileNo)
+		data = bytes.NewReader(buf[6:8])
+		binary.Read(data, binary.BigEndian, &offSet)
+		fileIdent := FileIdent{
+			Fileno: fileNo,
+			Offset: offSet,
+		}
+		retransctrl.Ack(fileIdent)
 	}
 }
 
@@ -361,7 +360,6 @@ func ack(conn *net.UDPConn, receivedPacket *Packet, udpAddr *net.UDPAddr) {
 	if err != nil {
 		panic("serialization error")
 	}
-	fmt.Println("send Ack ", data)
 	_, err = conn.WriteToUDP(data, udpAddr)
 	if err != nil {
 		panic(err)

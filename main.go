@@ -12,6 +12,7 @@ import (
 	"time"
 )
 
+
 type FileIdent struct {
 	Fileno int16
 	Offset int16
@@ -78,7 +79,7 @@ func (b *BuilderFromPacket) Set(tp *Packet) {
 }
 
 func (b *BuilderFromPacket) WriteFile(fileNumber int16) error {
-	fileName := fmt.Sprintf("data2/data%d", fileNumber)
+	fileName := fmt.Sprintf("data/data%d", fileNumber)
 	file, err := os.OpenFile(fileName, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0666)
 	if err != nil {
 		return err
@@ -153,7 +154,6 @@ func main() {
 }
 
 func server() {
-	start := time.Now()
 	addr, err := net.ResolveUDPAddr("udp", "0.0.0.0:8888")
 	if err != nil {
 		panic(err)
@@ -176,22 +176,15 @@ func server() {
 	go bfp.handleClient(conn, ch)
 
 	for {
-		end := time.Now()
-		if end.Sub(start).Milliseconds() >= 60_000 {
-			return
-		}
+		//end := time.Now()
+		//if end.Sub(start).Milliseconds() >= 60_000 {
+		//	return
+		//}
 	}
 }
 
 func (bfp *BuilderFromPacket) handleClient(conn *net.UDPConn, ch chan []byte) {
-	//buf := make([]byte, 1500)
-	//
-	//n, err := conn.Read(buf[0:])
-	//if err != nil {
-	//	panic(err)
-	//}
-
-	udpAddr, err := net.ResolveUDPAddr("udp", "localhost:9999")
+	udpAddr, err := net.ResolveUDPAddr("udp", "169.254.155.219:9999")
 	if err != nil {
 		panic(err)
 	}
@@ -210,7 +203,7 @@ func (bfp *BuilderFromPacket) handleClient(conn *net.UDPConn, ch chan []byte) {
 
 func client() {
 	start := time.Now()
-	retransCtrl := RetransCtrl{
+	retransCtrl := RetransCtrl {
 		v: make(map[FileIdent]bool),
 	}
 
@@ -218,11 +211,11 @@ func client() {
 
 	go readFile(ch1, &retransCtrl)
 
-	dstAddr, err := net.ResolveUDPAddr("udp", "localhost:8888")
+	dstAddr, err := net.ResolveUDPAddr("udp", "169.254.229.153:8888")
 	if err != nil {
 		panic(err)
 	}
-	srcAddr, err := net.ResolveUDPAddr("udp", "localhost:9999")
+	srcAddr, err := net.ResolveUDPAddr("udp", "169.254.155.219:9999")
 	if err != nil {
 		panic(err)
 	}
@@ -248,7 +241,7 @@ func client() {
 }
 
 func readFile(ch chan []byte, retransCtrl *RetransCtrl) {
-	for i:=0; i<1000; i++ {
+	for i:=0; i<200; i++ {
 		fmt.Printf("read data%d\n", i)
 		fileName := fmt.Sprintf("data/data%d", i)
 		data, err := ioutil.ReadFile(fileName)

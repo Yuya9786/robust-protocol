@@ -9,8 +9,10 @@ const (
 	MTU = 1500
 	filesize = 102400
 	packet_data_size = MTU - 20 - 8 - 8
-	TARO = "169.254.155.219:8888"
-	HANAKO = "169.254.229.153:8888"
+	//TARO = "169.254.155.219:8888"
+	//HANAKO = "169.254.229.153:8888"
+	TARO = "localhost:9999"
+	HANAKO = "localhost:8888"
 )
 
 func main() {
@@ -50,7 +52,7 @@ func client() {
 	go c.Receive()
 	go c.HandleAck()
 
-	time.Sleep(60)
+	time.Sleep(time.Second * 60)
 }
 
 

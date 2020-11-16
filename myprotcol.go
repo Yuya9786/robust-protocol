@@ -23,7 +23,7 @@ type Server struct {
 }
 
 func (c *Client) Initialize(dstAddr string, srcAddr string) {
-	conn, err := UDPInitialize(srcAddr, dstAddr)
+	conn, err := UDPInitialize(dstAddr, srcAddr)
 	if err != nil {
 		panic(err)
 	}

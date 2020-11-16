@@ -145,6 +145,7 @@ func (s *Server) Initialize(dstAddr string, srcAddr string) {
 	s.Bfp = &BuilderFromPacket {
 		DataSegments:            make(map[FileIdent][]byte),
 		CurrentReceivedFileSize: make(map[int16]int),
+		ExpectedFileSegemnt: make(map[int16]FileIdent),
 	}
 }
 

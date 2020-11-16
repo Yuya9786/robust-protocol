@@ -99,7 +99,7 @@ func (c *Client) ReadFile() {
 				panic(err)
 			}
 			j++
-			c.Buf[i][j] = data
+			c.Buf[i] = append(c.Buf[i], data)
 			c.Ch1 <- &fileIdent
 		}
 

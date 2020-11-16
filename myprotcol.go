@@ -48,12 +48,14 @@ func (c *Client) Send() {
 				continue
 			}
 			c.Conn.Write(c.Buf[packetIdent.Fileno][packetIdent.Offset])
+			fmt.Println("2", packetIdent)
 			c.Ch2 <- packetIdent
 		case packetIdent = <- c.Ch1:
 			if c.Read(packetIdent) {
 				continue
 			}
 			c.Conn.Write(c.Buf[packetIdent.Fileno][packetIdent.Offset])
+			fmt.Println("1", packetIdent)
 			c.Ch1 <- packetIdent
 		}
 
@@ -165,6 +167,7 @@ func (s *Server) handleClient() {
 		buf := <- s.Ch
 		var packet Packet
 		packet.Deserialize(buf)
+		fmt.Println(packet.Header.FileIdent)
 		s.Bfp.Set(&packet)
 		s.Ack(&packet)
 	}

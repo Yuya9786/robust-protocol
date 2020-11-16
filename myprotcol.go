@@ -124,11 +124,11 @@ func (c *Client) HandleAck() {
 		binary.Read(data, binary.BigEndian, &fileNo)
 		data = bytes.NewReader(buf[6:8])
 		binary.Read(data, binary.BigEndian, &offSet)
-		fileIdent := FileIdent{
+		ackIdent := FileIdent{
 			Fileno: fileNo,
 			Offset: offSet,
 		}
-		c.RetransCtrl.Ack(fileIdent)
+		c.RetransCtrl.Ack(ackIdent)
 	}
 }
 
@@ -175,15 +175,15 @@ func (s *Server) handleClient() {
 
 func (s *Server) Ack(receivedPacket *Packet) {
 	ident := receivedPacket.Header.FileIdent
+
+	ackIdent := s.Bfp.ExpectedFileSegemnt[ident.Fileno]
+
 	p := Packet{
 		Header: Header{
 			Type:      1,
 			Length:    0,
 			Space:     0,
-			FileIdent: FileIdent{
-				Fileno: ident.Fileno,
-				Offset: ident.Offset,
-			},
+			FileIdent: ackIdent,
 		},
 		Data:   nil,
 	}
@@ -220,6 +220,13 @@ func (ctrl *RetransCtrl) Read(ident FileIdent) bool {
 
 func (ctrl *RetransCtrl) Ack(ident FileIdent) {
 	ctrl.mu.Lock()
-	ctrl.v[ident] = true
+	// ackによって送られてきたidentよりも前のセグメントは送信完了と見なす
+	for i:=0;int16(i) <= ident.Offset;i++ {
+		tmpIdent := FileIdent{
+			Fileno: ident.Fileno,
+			Offset: int16(i),
+		}
+		ctrl.v[tmpIdent] = true
+	}
 	ctrl.mu.Unlock()
 }

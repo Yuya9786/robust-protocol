@@ -52,7 +52,8 @@ func (p *Packet) Deserialize(buf []byte) error {
 // 受け取ったパケットからファイルを再構築する
 type BuilderFromPacket struct {
 	DataSegments map[FileIdent][]byte
-	CurrentReceivedFileSize map[int16]int
+	CurrentReceivedFileSize map[int16]int	// ファイルごとの送られてきたサイズ
+	ExpectedFileSegemnt map[int16]FileIdent	// ファイルごとの次に送られてくるべきセグメント (for window control)
 }
 
 func (b *BuilderFromPacket) Set(tp *Packet) {
@@ -61,12 +62,31 @@ func (b *BuilderFromPacket) Set(tp *Packet) {
 		return
 	}
 	b.DataSegments[ident] = tp.Data
-	fileNum := ident.Fileno
-	if _, ok := b.CurrentReceivedFileSize[fileNum]; !ok {
-		b.CurrentReceivedFileSize[fileNum] = 0
+	if _, ok := b.CurrentReceivedFileSize[ident.Fileno]; !ok {
+		b.CurrentReceivedFileSize[ident.Fileno] = 0
 	}
-	b.CurrentReceivedFileSize[fileNum] += int(tp.Header.Length)
-	if b.CurrentReceivedFileSize[fileNum] >= filesize {
+	b.CurrentReceivedFileSize[ident.Fileno] += int(tp.Header.Length)
+	if _, ok := b.ExpectedFileSegemnt[ident.Fileno]; !ok {
+		b.ExpectedFileSegemnt[ident.Fileno] = FileIdent{
+			Fileno: ident.Fileno,
+			Offset: 0,
+		}
+	}
+	if ident == b.ExpectedFileSegemnt[ident.Fileno] {
+		// 期待していたパケットが届いたため，次に期待するパケットに変える
+		for i:=1;;i++ {
+			tmpIdent := FileIdent{
+				Fileno: ident.Fileno,
+				Offset: ident.Offset + int16(i),
+			}
+			if _, ok := b.DataSegments[tmpIdent]; !ok {
+				// まだ受け取っていないデータセグメントが見つかった
+				b.ExpectedFileSegemnt[ident.Fileno] = tmpIdent
+			}
+		}
+	}
+	
+	if b.CurrentReceivedFileSize[ident.Fileno] >= filesize {
 		b.WriteFile(ident.Fileno)
 	}
 }

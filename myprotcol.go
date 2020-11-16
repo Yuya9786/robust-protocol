@@ -49,7 +49,7 @@ func (c *Client) Send() {
 			}
 			c.Conn.Write(c.Buf[packetIdent.Fileno][packetIdent.Offset])
 			fmt.Println("2", packetIdent)
-			c.Ch2 <- packetIdent
+			//c.Ch2 <- packetIdent
 		case packetIdent = <- c.Ch1:
 			if c.Read(packetIdent) {
 				continue
@@ -65,7 +65,7 @@ func (c *Client) Send() {
 }
 
 func (c *Client) ReadFile() {
-	for i:=0; i<300; i++ {
+	for i:=0; i<200; i++ {
 		fmt.Printf("read data%d\n", i)
 		fileName := fmt.Sprintf("data/data%d", i)
 		data, err := ioutil.ReadFile(fileName)

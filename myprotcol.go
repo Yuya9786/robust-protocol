@@ -167,7 +167,6 @@ func (s *Server) handleClient() {
 		buf := <- s.Ch
 		var packet Packet
 		packet.Deserialize(buf)
-		fmt.Println(packet.Header.FileIdent)
 		s.Bfp.Set(&packet)
 		s.Ack(&packet)
 	}

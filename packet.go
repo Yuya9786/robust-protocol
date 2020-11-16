@@ -74,7 +74,7 @@ func (b *BuilderFromPacket) Set(tp *Packet) {
 	}
 	if ident == b.ExpectedFileSegemnt[ident.Fileno] {
 		// 期待していたパケットが届いたため，次に期待するパケットに変える
-		for i:=1;;i++ {
+		for i:=1;i<72;i++ {
 			tmpIdent := FileIdent{
 				Fileno: ident.Fileno,
 				Offset: ident.Offset + int16(i),
@@ -82,10 +82,10 @@ func (b *BuilderFromPacket) Set(tp *Packet) {
 			if _, ok := b.DataSegments[tmpIdent]; !ok {
 				// まだ受け取っていないデータセグメントが見つかった
 				b.ExpectedFileSegemnt[ident.Fileno] = tmpIdent
+				break
 			}
 		}
 	}
-	
 	if b.CurrentReceivedFileSize[ident.Fileno] >= filesize {
 		b.WriteFile(ident.Fileno)
 	}

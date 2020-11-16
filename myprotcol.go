@@ -32,7 +32,7 @@ func (c *Client) Initialize(dstAddr string, srcAddr string) {
 	c.Ch1 = make(chan []byte, 70000)	// チャネルが短いとうまく動かない場合あり
 	c.Ch2 = make(chan []byte, 2000)
 	c.RetransCtrl = &RetransCtrl {
-		v: make(map[FileIdent]bool),
+		v: make(map[int16]int16),
 	}
 }
 
@@ -49,7 +49,8 @@ func (c *Client) Send() {
 			Offset: offSet,
 		}
 
-		if c.RetransCtrl.Read(fileIdent) {
+		nextOffset := c.RetransCtrl.Read(fileIdent) 
+		if nextOffset > fileIdent.Offset {
 			continue
 		}
 
@@ -59,13 +60,15 @@ func (c *Client) Send() {
 }
 
 func (c *Client) ReadFile() {
-	for i:=0; i<200; i++ {
+	for i:=0; i<300; i++ {
 		fmt.Printf("read data%d\n", i)
 		fileName := fmt.Sprintf("data/data%d", i)
 		data, err := ioutil.ReadFile(fileName)
 		if err != nil {
 			panic(err)
 		}
+
+		c.RetransCtrl.Set(int16(i))
 		var j int16 = 0
 		for k := 0; k < len(data); k += packet_data_size {
 			var dataSize int16
@@ -88,7 +91,6 @@ func (c *Client) ReadFile() {
 				},
 				Data: packetData,
 			}
-			c.RetransCtrl.Set(fileIdent)
 			data, err := packet.Serialize()
 			if err != nil {
 				panic(err)
@@ -164,12 +166,9 @@ func (s *Server) Receive() {
 func (s *Server) handleClient() {
 	for {
 		buf := <- s.Ch
-
 		var packet Packet
 		packet.Deserialize(buf)
-
 		s.Bfp.Set(&packet)
-
 		s.Ack(&packet)
 	}
 }
@@ -203,18 +202,18 @@ func (s *Server) Ack(receivedPacket *Packet) {
 // 再送制御を担当
 type RetransCtrl struct {
 	mu sync.Mutex
-	v map[FileIdent]bool
+	v map[int16]int16
 }
 
-func (ctrl *RetransCtrl) Set(ident FileIdent) {
+func (ctrl *RetransCtrl) Set(fileNo int16) {
 	ctrl.mu.Lock()
-	ctrl.v[ident] = false
+	ctrl.v[fileNo] = 0
 	ctrl.mu.Unlock()
 }
 
-func (ctrl *RetransCtrl) Read(ident FileIdent) bool {
+func (ctrl *RetransCtrl) Read(ident FileIdent) int16 {
 	ctrl.mu.Lock()
-	f := ctrl.v[ident]
+	f := ctrl.v[ident.Fileno]
 	ctrl.mu.Unlock()
 	return f
 }
@@ -222,12 +221,6 @@ func (ctrl *RetransCtrl) Read(ident FileIdent) bool {
 func (ctrl *RetransCtrl) Ack(ident FileIdent) {
 	ctrl.mu.Lock()
 	// ackによって送られてきたidentよりも前のセグメントは送信完了と見なす
-	for i:=0;int16(i) <= ident.Offset;i++ {
-		tmpIdent := FileIdent{
-			Fileno: ident.Fileno,
-			Offset: int16(i),
-		}
-		ctrl.v[tmpIdent] = true
-	}
+	ctrl.v[ident.Fileno] = ident.Offset
 	ctrl.mu.Unlock()
 }

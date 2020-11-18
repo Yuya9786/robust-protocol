@@ -11,8 +11,8 @@ import (
 
 type Client struct {
 	Conn *net.UDPConn
-	Ch1 chan *FileIdent
-	Ch2 chan *FileIdent
+	Ch1 chan *FileSegment
+	Ch2 chan *FileSegment
 	RetransCtrl *RetransCtrl
 	Buf [][][]byte
 }
@@ -30,10 +30,10 @@ func (c *Client) Initialize(dstAddr string, srcAddr string) {
 	}
 
 	c.Conn = conn
-	c.Ch1 = make(chan *FileIdent, 70000)	// チャネルが短いとうまく動かない場合あり
-	c.Ch2 = make(chan *FileIdent, 70000)
+	c.Ch1 = make(chan *FileSegment, 70000)	// チャネルが短いとうまく動かない場合あり
+	c.Ch2 = make(chan *FileSegment, 70000)
 	c.RetransCtrl = &RetransCtrl {
-		v: make(map[FileIdent]bool),
+		v: make(map[FileSegment]bool),
 		newest: make(map[int16]int16),
 	}
 	c.Buf = make([][][]byte, 1000)
@@ -41,20 +41,20 @@ func (c *Client) Initialize(dstAddr string, srcAddr string) {
 
 func (c *Client) Send() {
 	for {
-		var packetIdent *FileIdent
+		var packetIdent *FileSegment
 		select {
 			case packetIdent = <- c.Ch2:
 				if c.Read(packetIdent) {
 					continue
 				}
-				c.Conn.Write(c.Buf[packetIdent.Fileno][packetIdent.Offset])
+				c.Conn.Write(c.Buf[packetIdent.fileno][packetIdent.offset])
 				//fmt.Println("2", packetIdent)
 				c.Ch2 <- packetIdent
 			case packetIdent = <- c.Ch1:
 				if c.Read(packetIdent) {
 					continue
 				}
-				c.Conn.Write(c.Buf[packetIdent.Fileno][packetIdent.Offset])
+				c.Conn.Write(c.Buf[packetIdent.fileno][packetIdent.offset])
 				//fmt.Println("1", packetIdent)
 				c.Ch1 <- packetIdent
 		}
@@ -79,17 +79,17 @@ func (c *Client) ReadFile() {
 				dataSize = packet_data_size
 			}
 			packetData := data[k : k+int(dataSize)]
-			fileIdent := FileIdent{
-				Fileno: int16(i),
-				Offset: j,
+			FileSegment := FileSegment{
+				fileno: int16(i),
+				offset: j,
 			}
-			c.Set(&fileIdent)
+			c.Set(&FileSegment)
 			packet := &Packet{
 				Header: Header{
 					Type:      0,
 					Length:    dataSize,
 					Space:     0,
-					FileIdent: fileIdent,
+					FileSegment: FileSegment,
 				},
 				Data: packetData,
 			}
@@ -99,7 +99,7 @@ func (c *Client) ReadFile() {
 			}
 			j++
 			c.Buf[i] = append(c.Buf[i], data)
-			c.Ch1 <- &fileIdent
+			c.Ch1 <- &FileSegment
 		}
 
 	}
@@ -118,14 +118,14 @@ func (c *Client) Receive() {
 			return
 		}
 
-		var fileNo, offSet int16
+		var fileno, offset int16
 		data := bytes.NewReader(buf[4:6])
-		binary.Read(data, binary.BigEndian, &fileNo)
+		binary.Read(data, binary.BigEndian, &fileno)
 		data = bytes.NewReader(buf[6:8])
-		binary.Read(data, binary.BigEndian, &offSet)
-		ackIdent := FileIdent{
-			Fileno: fileNo,
-			Offset: offSet,
+		binary.Read(data, binary.BigEndian, &offset)
+		ackIdent := FileSegment{
+			fileno: fileno,
+			offset: offset,
 		}
 		c.Ack(&ackIdent)
 	}
@@ -142,7 +142,7 @@ func (s *Server) Initialize(dstAddr string, srcAddr string) {
 	s.Conn = conn
 	s.Ch = ch
 	s.Bfp = &BuilderFromPacket {
-		DataSegments:            make(map[FileIdent][]byte),
+		DataSegments:            make(map[FileSegment][]byte),
 		CurrentReceivedFileSize: make(map[int16]int),
 	}
 }
@@ -171,14 +171,14 @@ func (s *Server) handleClient() {
 
 func (s *Server) Ack(receivedPacket *Packet) {
 	// パケットごとにACKを返す
-	ident := receivedPacket.Header.FileIdent
+	ident := receivedPacket.Header.FileSegment
 
 	p := Packet{
 		Header: Header{
 			Type:      1,
 			Length:    0,
 			Space:     0,
-			FileIdent: ident,
+			FileSegment: ident,
 		},
 		Data:   nil,
 	}
@@ -197,24 +197,24 @@ func (s *Server) Ack(receivedPacket *Packet) {
 // 再送制御を担当
 type RetransCtrl struct {
 	mu sync.Mutex
-	v map[FileIdent]bool
+	v map[FileSegment]bool
 	newest map[int16]int16
 }
 
-func (c *Client) Set(ident *FileIdent) {
+func (c *Client) Set(ident *FileSegment) {
 	c.RetransCtrl.mu.Lock()
 	c.RetransCtrl.v[*ident] = false
 	c.RetransCtrl.mu.Unlock()
 }
 
-func (c *Client) Read(ident *FileIdent) bool {
+func (c *Client) Read(ident *FileSegment) bool {
 	c.RetransCtrl.mu.Lock()
 	b := c.RetransCtrl.v[*ident]
 	c.RetransCtrl.mu.Unlock()
 	return b
 }
 
-func (c *Client) Ack(ident *FileIdent) {
+func (c *Client) Ack(ident *FileSegment) {
 	c.RetransCtrl.mu.Lock()
 
 	// 既にACKが来ているかチェック，来ていれば捨てる
@@ -226,25 +226,25 @@ func (c *Client) Ack(ident *FileIdent) {
 
 	//fmt.Println("ACK: ", ident)
 	var i int16
-	if _, ok := c.RetransCtrl.newest[ident.Fileno]; !ok {
+	if _, ok := c.RetransCtrl.newest[ident.fileno]; !ok {
 		// そのファイルの中で初めてACKが返ってきた場合
-		c.RetransCtrl.newest[ident.Fileno] = ident.Offset
+		c.RetransCtrl.newest[ident.fileno] = ident.offset
 		i = 0
 	} else {
-		i = c.RetransCtrl.newest[ident.Fileno]
-		if i >= ident.Offset {
+		i = c.RetransCtrl.newest[ident.fileno]
+		if i >= ident.offset {
 			// 既に受け取ったACKのオフセットよりも小さい場合
 			c.RetransCtrl.v[*ident] = true
 			c.RetransCtrl.mu.Unlock()
 			return
 		}
-		c.RetransCtrl.newest[ident.Fileno] = ident.Offset
+		c.RetransCtrl.newest[ident.fileno] = ident.offset
 	}
 
-	for ; i<ident.Offset; i++ {
-		tmpIdent := &FileIdent{
-			Fileno: ident.Fileno,
-			Offset: i,
+	for ; i<ident.offset; i++ {
+		tmpIdent := &FileSegment{
+			fileno: ident.fileno,
+			offset: i,
 		}
 		if c.RetransCtrl.v[*tmpIdent] {
 			continue

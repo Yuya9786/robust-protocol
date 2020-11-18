@@ -7,16 +7,11 @@ import (
 	"os"
 )
 
-type FileIdent struct {
-	Fileno int16
-	Offset int16
-}
-
 type Header struct {
 	Type int8
 	Length int16
 	Space int8
-	FileIdent FileIdent
+	FileSegment FileSegment
 }
 
 type Packet struct {
@@ -51,24 +46,24 @@ func (p *Packet) Deserialize(buf []byte) error {
 
 // 受け取ったパケットからファイルを再構築する
 type BuilderFromPacket struct {
-	DataSegments map[FileIdent][]byte
+	DataSegments map[FileSegment][]byte
 	CurrentReceivedFileSize map[int16]int	// ファイルごとの送られてきたサイズ
 }
 
 func (b *BuilderFromPacket) Set(tp *Packet) {
-	ident := tp.Header.FileIdent
+	ident := tp.Header.FileSegment
 	if _, ok := b.DataSegments[ident]; ok {
 		//fmt.Println("無駄パケット", ident)
 		return
 	}
 	//fmt.Println("not無駄パケット", ident)
 	b.DataSegments[ident] = tp.Data
-	if _, ok := b.CurrentReceivedFileSize[ident.Fileno]; !ok {
-		b.CurrentReceivedFileSize[ident.Fileno] = 0
+	if _, ok := b.CurrentReceivedFileSize[ident.fileno]; !ok {
+		b.CurrentReceivedFileSize[ident.fileno] = 0
 	}
-	b.CurrentReceivedFileSize[ident.Fileno] += int(tp.Header.Length)
-	if b.CurrentReceivedFileSize[ident.Fileno] >= filesize {
-		b.WriteFile(ident.Fileno)
+	b.CurrentReceivedFileSize[ident.fileno] += int(tp.Header.Length)
+	if b.CurrentReceivedFileSize[ident.fileno] >= filesize {
+		b.WriteFile(ident.fileno)
 	}
 }
 
@@ -82,9 +77,9 @@ func (b *BuilderFromPacket) WriteFile(fileNumber int16) error {
 
 	data := make([]byte, 0, 1500)
 	for i := 0;;i++ {
-		ident := FileIdent{
-			Fileno: fileNumber,
-			Offset: int16(i),
+		ident := FileSegment{
+			fileno: fileNumber,
+			offset: int16(i),
 		}
 		dataSegment, ok := b.DataSegments[ident]
 		if !ok {

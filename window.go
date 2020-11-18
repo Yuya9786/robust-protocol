@@ -42,7 +42,15 @@ func (c *Client) AckSegment(transID uint32) {
 		
 		if !item.ack {
 			if !c.Read(item.segment) {
-				c.Conn.Write(c.Buf[item.segment.Fileno][item.segment.Offset])
+				transID := c.window.push(item.segment)
+				packet := c.Buf[item.segment.Fileno][item.segment.Offset]
+				packet.Header.transID = transID
+				data, err := packet.Serialize()
+				if err != nil {
+					panic(err)
+				}
+
+				c.Conn.Write(data)
 			}
 		}
 	}

@@ -40,7 +40,7 @@ func (c *Client) AckSegment(transID uint32) {
 		c.window.transHead++
 		
 		if !item.ack {
-			if !c.Read(item.segment) {
+			if !c.Read(*item.segment) {
 				transID := c.window.push(item.segment)
 				packet := c.Buf[item.segment.Fileno][item.segment.Offset]
 				packet.Header.TransID = transID

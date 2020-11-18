@@ -43,7 +43,7 @@ func (c *Client) Send() {
 		var packetIdent *FileIdent
 		select {
 			case packetIdent = <- c.Ch2:
-				if c.Read(packetIdent) {
+				if c.Read(*packetIdent) {
 					continue
 				}
 				transID := c.window.push(packetIdent)
@@ -57,7 +57,7 @@ func (c *Client) Send() {
 				c.Conn.Write(data)
 
 			case packetIdent = <- c.Ch1:
-				if c.Read(packetIdent) {
+				if c.Read(*packetIdent) {
 					continue
 				}
 				transID := c.window.push(packetIdent)
@@ -95,7 +95,7 @@ func (c *Client) ReadFile() {
 				Fileno: int16(i),
 				Offset: j,
 			}
-			c.Set(&fileIdent)
+			c.Set(fileIdent)
 			packet := &Packet{
 				Header: Header{
 					Type:      0,
@@ -207,15 +207,15 @@ type RetransCtrl struct {
 	v map[FileIdent]bool
 }
 
-func (c *Client) Set(ident *FileIdent) {
+func (c *Client) Set(ident FileIdent) {
 	c.RetransCtrl.mu.Lock()
-	c.RetransCtrl.v[*ident] = false
+	c.RetransCtrl.v[ident] = false
 	c.RetransCtrl.mu.Unlock()
 }
 
-func (c *Client) Read(ident *FileIdent) bool {
+func (c *Client) Read(ident FileIdent) bool {
 	c.RetransCtrl.mu.Lock()
-	b := c.RetransCtrl.v[*ident]
+	b := c.RetransCtrl.v[ident]
 	c.RetransCtrl.mu.Unlock()
 	return b
 }

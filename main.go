@@ -8,7 +8,7 @@ import (
 const (
 	MTU = 1500
 	filesize = 102400
-	packet_data_size = MTU - 20 - 8 - 8
+	packet_data_size = MTU - 20 - 8 - 12
 	TARO = "169.254.155.219:8888"
 	HANAKO = "169.254.229.153:8888"
 )

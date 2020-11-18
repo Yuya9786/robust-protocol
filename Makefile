@@ -19,5 +19,4 @@ rbp: $(SRCS)
 	go build -o rbp $(SRCS)
 
 clean:
-	rm -f data/*
 	rm -f rbp

@@ -56,7 +56,7 @@ func (c *Client) Send() {
 			}
 			c.Conn.Write(c.Buf[packetIdent.Fileno][packetIdent.Offset])
 			fmt.Println("1", packetIdent)
-			c.Ch1 <- packetIdent
+			//c.Ch1 <- packetIdent
 		}
 
 
@@ -228,6 +228,7 @@ func (c *Client) Ack(ident *FileIdent) {
 		i = c.RetransCtrl.newest[ident.Fileno]
 		c.RetransCtrl.newest[ident.Fileno] = ident.Offset
 	}
+	fmt.Println("ACK: ", ident)
 	for ; i<ident.Offset; i++ {
 		tmpIdent := &FileIdent{
 			Fileno: ident.Fileno,

@@ -48,14 +48,14 @@ func (c *Client) Send() {
 				continue
 			}
 			c.Conn.Write(c.Buf[packetIdent.Fileno][packetIdent.Offset])
-			fmt.Println("2", packetIdent)
+			//fmt.Println("2", packetIdent)
 			c.Ch2 <- packetIdent
 		case packetIdent = <- c.Ch1:
 			if c.Read(packetIdent) {
 				continue
 			}
 			c.Conn.Write(c.Buf[packetIdent.Fileno][packetIdent.Offset])
-			fmt.Println("1", packetIdent)
+			//fmt.Println("1", packetIdent)
 			//c.Ch1 <- packetIdent
 		}
 
@@ -222,6 +222,7 @@ func (c *Client) Ack(ident *FileIdent) {
 
 	// 既にACKが来ているかチェック，来ていれば捨てる
 	if c.RetransCtrl.v[ident] {
+		fmt.Println("Drop Ack ", ident)
 		c.RetransCtrl.mu.Unlock()
 		return
 	}
@@ -230,11 +231,14 @@ func (c *Client) Ack(ident *FileIdent) {
 	var i int16
 	if _, ok := c.RetransCtrl.newest[ident.Fileno]; !ok {
 		// そのファイルの中で初めてACKが返ってきた場合
+		fmt.Println("A", ident)
 		c.RetransCtrl.newest[ident.Fileno] = ident.Offset
 		i = 0
 	} else {
+		fmt.Println("B", ident)
 		i = c.RetransCtrl.newest[ident.Fileno]
 		if i >= ident.Offset {
+			fmt.Println("C", ident)
 			// 既に受け取ったACKのオフセットよりも小さい場合
 			c.RetransCtrl.v[ident] = true
 			c.RetransCtrl.mu.Unlock()
@@ -243,12 +247,15 @@ func (c *Client) Ack(ident *FileIdent) {
 		c.RetransCtrl.newest[ident.Fileno] = ident.Offset
 	}
 
+	fmt.Println("D", ident)
 	for ; i<ident.Offset; i++ {
 		tmpIdent := &FileIdent{
 			Fileno: ident.Fileno,
 			Offset: i,
 		}
+		fmt.Println(i, tmpIdent)
 		if c.RetransCtrl.v[tmpIdent] {
+			fmt.Println("E", tmpIdent)
 			continue
 		}
 		fmt.Println("失敗: ", tmpIdent)

@@ -64,7 +64,7 @@ func (c *Client) Send() {
 }
 
 func (c *Client) ReadFile() {
-	for i:=0; i<1000; i++ {
+	for i:=0; i<350; i++ {
 		fmt.Printf("read data%d\n", i)
 		fileName := fmt.Sprintf("data/data%d", i)
 		data, err := ioutil.ReadFile(fileName)

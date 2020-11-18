@@ -164,13 +164,13 @@ func (s *Server) Receive() {
 func (s *Server) handleClient() {
 	for {
 		buf := <- s.Ch
-		var packet Packet
+		var packet *Packet
 		err := packet.Deserialize(buf)
 		if err != nil {
 			panic(err)
 		}
-		s.Bfp.Set(&packet)
-		s.Ack(&packet)
+		s.Bfp.Set(packet)
+		s.Ack(packet)
 	}
 }
 

@@ -200,19 +200,19 @@ func (s *Server) Ack(receivedPacket *Packet) {
 // 再送制御を担当
 type RetransCtrl struct {
 	mu sync.Mutex
-	v map[*FileIdent]bool
+	v map[FileIdent]bool
 	newest map[int16]int16
 }
 
 func (c *Client) Set(ident *FileIdent) {
 	c.RetransCtrl.mu.Lock()
-	c.RetransCtrl.v[ident] = false
+	c.RetransCtrl.v[*ident] = false
 	c.RetransCtrl.mu.Unlock()
 }
 
 func (c *Client) Read(ident *FileIdent) bool {
 	c.RetransCtrl.mu.Lock()
-	b := c.RetransCtrl.v[ident]
+	b := c.RetransCtrl.v[*ident]
 	c.RetransCtrl.mu.Unlock()
 	return b
 }
@@ -221,7 +221,7 @@ func (c *Client) Ack(ident *FileIdent) {
 	c.RetransCtrl.mu.Lock()
 
 	// 既にACKが来ているかチェック，来ていれば捨てる
-	if c.RetransCtrl.v[ident] {
+	if c.RetransCtrl.v[*ident] {
 		fmt.Println("Drop Ack ", ident)
 		c.RetransCtrl.mu.Unlock()
 		return
@@ -240,7 +240,7 @@ func (c *Client) Ack(ident *FileIdent) {
 		if i >= ident.Offset {
 			fmt.Println("C", ident)
 			// 既に受け取ったACKのオフセットよりも小さい場合
-			c.RetransCtrl.v[ident] = true
+			c.RetransCtrl.v[*ident] = true
 			c.RetransCtrl.mu.Unlock()
 			return
 		}
@@ -254,13 +254,13 @@ func (c *Client) Ack(ident *FileIdent) {
 			Offset: i,
 		}
 		fmt.Println(i, tmpIdent)
-		if c.RetransCtrl.v[tmpIdent] {
+		if c.RetransCtrl.v[*tmpIdent] {
 			fmt.Println("E", tmpIdent)
 			continue
 		}
 		fmt.Println("失敗: ", tmpIdent)
 		c.Ch2 <- tmpIdent
 	}
-	c.RetransCtrl.v[ident] = true
+	c.RetransCtrl.v[*ident] = true
 	c.RetransCtrl.mu.Unlock()
 }

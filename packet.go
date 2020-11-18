@@ -48,8 +48,11 @@ func (p *Packet) Deserialize(buf []byte) error {
 		fmt.Println("c")
 		return err
 	}
+	fmt.Println("d")
 	p.Header = header
+	fmt.Println("e")
 	p.Data = buf[12:]
+	fmt.Println("f")
 	return nil
 }
 

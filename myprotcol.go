@@ -50,11 +50,7 @@ func (c *Client) Send() {
 			c.Conn.Write(c.Buf[packetIdent.Fileno][packetIdent.Offset])
 			//fmt.Println("2", packetIdent)
 			c.Ch2 <- packetIdent
-			continue
-		default:
-		}
 
-		select {
 		case packetIdent = <- c.Ch1:
 			if c.Read(packetIdent) {
 				continue
@@ -62,9 +58,8 @@ func (c *Client) Send() {
 			c.Conn.Write(c.Buf[packetIdent.Fileno][packetIdent.Offset])
 			//fmt.Println("1", packetIdent)
 			if packetIdent.Offset >= 69 {
-				c.Ch1 <- packetIdent
+				c.Ch2 <- packetIdent
 			}
-		default:
 		}
 	}
 }

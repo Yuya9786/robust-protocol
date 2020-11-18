@@ -127,7 +127,7 @@ func (c *Client) Receive() {
 			return
 		}
 
-		var packet *Packet
+		var packet Packet
 		fmt.Println(buf[0:n])
 		packet.Deserialize(buf[0:n])
 		c.AckSegment(packet.Header.TransID)

@@ -40,7 +40,6 @@ func (p *Packet) Serialize() ([]byte, error) {
 }
 
 func (p *Packet) Deserialize(buf []byte) error {
-	fmt.Println("a")
 	var header Header
 	reader := bytes.NewReader(buf)
 	if err := binary.Read(reader, binary.BigEndian, &header); err != nil {

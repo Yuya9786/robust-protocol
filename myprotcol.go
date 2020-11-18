@@ -246,7 +246,6 @@ func (c *Client) Ack(ident *FileIdent) {
 			Fileno: ident.Fileno,
 			Offset: i,
 		}
-		fmt.Println(i, tmpIdent)
 		if c.RetransCtrl.v[*tmpIdent] {
 			continue
 		}

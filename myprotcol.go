@@ -48,7 +48,7 @@ func (c *Client) Send() {
 				}
 				transID := c.window.push(packetIdent)
 				packet := c.Buf[packetIdent.Fileno][packetIdent.Offset]
-				packet.Header.transID = transID
+				packet.Header.TransID = transID
 				data, err := packet.Serialize()
 				if err != nil {
 					panic(err)
@@ -62,7 +62,7 @@ func (c *Client) Send() {
 				}
 				transID := c.window.push(packetIdent)
 				packet := c.Buf[packetIdent.Fileno][packetIdent.Offset]
-				packet.Header.transID = transID
+				packet.Header.TransID = transID
 				data, err := packet.Serialize()
 				if err != nil {
 					panic(err)
@@ -102,7 +102,7 @@ func (c *Client) ReadFile() {
 					Length:    dataSize,
 					Space:     0,
 					FileIdent: fileIdent,
-					transID: 0,
+					TransID: 0,
 				},
 				Data: packetData,
 			}
@@ -129,7 +129,7 @@ func (c *Client) Receive() {
 
 		var packet *Packet
 		packet.Deserialize(buf[0:n])
-		c.AckSegment(packet.Header.transID)
+		c.AckSegment(packet.Header.TransID)
 	}
 }
 
@@ -177,7 +177,7 @@ func (s *Server) handleClient() {
 func (s *Server) Ack(receivedPacket *Packet) {
 	// パケットごとにACKを返す
 	ident := receivedPacket.Header.FileIdent
-	transID := receivedPacket.Header.transID
+	transID := receivedPacket.Header.TransID
 
 	p := Packet{
 		Header: Header{
@@ -185,7 +185,7 @@ func (s *Server) Ack(receivedPacket *Packet) {
 			Length:    0,
 			Space:     0,
 			FileIdent: ident,
-			transID: transID,
+			TransID: transID,
 		},
 		Data:   nil,
 	}

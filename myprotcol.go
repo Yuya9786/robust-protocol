@@ -62,7 +62,7 @@ func (c *Client) Send() {
 }
 
 func (c *Client) ReadFile() {
-	for i:=0; i<250; i++ {
+	for i:=0; i<300; i++ {
 		fmt.Printf("read data%d\n", i)
 		fileName := fmt.Sprintf("data/data%d", i)
 		data, err := ioutil.ReadFile(fileName)
@@ -228,14 +228,11 @@ func (c *Client) Ack(ident *FileIdent) {
 	var i int16
 	if _, ok := c.RetransCtrl.newest[ident.Fileno]; !ok {
 		// そのファイルの中で初めてACKが返ってきた場合
-		fmt.Println("A", ident)
 		c.RetransCtrl.newest[ident.Fileno] = ident.Offset
 		i = 0
 	} else {
-		fmt.Println("B", ident)
 		i = c.RetransCtrl.newest[ident.Fileno]
 		if i >= ident.Offset {
-			fmt.Println("C", ident)
 			// 既に受け取ったACKのオフセットよりも小さい場合
 			c.RetransCtrl.v[*ident] = true
 			c.RetransCtrl.mu.Unlock()
@@ -244,7 +241,6 @@ func (c *Client) Ack(ident *FileIdent) {
 		c.RetransCtrl.newest[ident.Fileno] = ident.Offset
 	}
 
-	fmt.Println("D", ident)
 	for ; i<ident.Offset; i++ {
 		tmpIdent := &FileIdent{
 			Fileno: ident.Fileno,
@@ -252,7 +248,6 @@ func (c *Client) Ack(ident *FileIdent) {
 		}
 		fmt.Println(i, tmpIdent)
 		if c.RetransCtrl.v[*tmpIdent] {
-			fmt.Println("E", tmpIdent)
 			continue
 		}
 		fmt.Println("失敗: ", tmpIdent)

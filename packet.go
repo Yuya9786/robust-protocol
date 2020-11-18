@@ -43,6 +43,7 @@ func (p *Packet) Deserialize(buf []byte) error {
 	fmt.Println("a")
 	var header Header
 	reader := bytes.NewReader(buf)
+	fmt.Println("b")
 	if err := binary.Read(reader, binary.BigEndian, &header); err != nil {
 		fmt.Println("c")
 		return err

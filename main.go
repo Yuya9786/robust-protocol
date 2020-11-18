@@ -14,24 +14,26 @@ const (
 )
 
 func main() {
-	f := flag.Int("mode", 1, "1: server 2: client")
+	mode := flag.Int("mode", 1, "1: server 2: client")
+	src := flag.String("src", TARO, "sender address")
+	dst := flag.String("dst", HANAKO, "receiver address")
 	flag.Parse()
-	if *f == 1 {
+	if *mode == 1 {
 		fmt.Println("mode: server")
 	} else {
 		fmt.Println("mode: client")
 	}
 
-	if *f == 1 {
-		server()
+	if *mode == 1 {
+		server(*src, *dst)
 	} else {
-		client()
+		client(*src, *dst)
 	}
 }
 
-func server() {
+func server(src string, dst string) {
 	s := &Server{}
-	s.Initialize(TARO, HANAKO)
+	s.Initialize(dst, src)
 
 	go s.Receive()
 
@@ -40,9 +42,9 @@ func server() {
 	for {}
 }
 
-func client() {
+func client(src string, dst string) {
 	c := &Client {}
-	c.Initialize(HANAKO, TARO)
+	c.Initialize(dst, src)
 
 	go c.ReadFile()
 	go c.Send()

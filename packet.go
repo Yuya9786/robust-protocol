@@ -40,19 +40,13 @@ func (p *Packet) Serialize() ([]byte, error) {
 }
 
 func (p *Packet) Deserialize(buf []byte) error {
-	fmt.Println("a")
 	var header Header
 	reader := bytes.NewReader(buf)
-	fmt.Println("b")
 	if err := binary.Read(reader, binary.BigEndian, &header); err != nil {
-		fmt.Println("c")
 		return err
 	}
-	fmt.Println("d")
 	p.Header = header
-	fmt.Println("e")
 	p.Data = buf[12:]
-	fmt.Println("f")
 	return nil
 }
 

@@ -128,7 +128,6 @@ func (c *Client) Receive() {
 		}
 
 		var packet Packet
-		fmt.Println(buf[0:n])
 		packet.Deserialize(buf[0:n])
 		c.AckSegment(packet.Header.TransID)
 	}
@@ -166,7 +165,6 @@ func (s *Server) handleClient() {
 	for {
 		buf := <- s.Ch
 		var packet Packet
-		fmt.Println(buf)
 		err := packet.Deserialize(buf)
 		if err != nil {
 			panic(err)

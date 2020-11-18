@@ -35,7 +35,7 @@ func (c *Client) AckSegment(transID uint32) {
 		c.window.window[transID].ack = true
 	}
 
-	for i:=c.window.transHead; int(i) < idxWindow; i++ {
+	for len(c.window.window) > 0 && c.window.transHead < transID {
 		item := c.window.window[0]
 		c.window.window = c.window.window[1:]
 		c.window.transHead++

@@ -58,6 +58,7 @@ type BuilderFromPacket struct {
 func (b *BuilderFromPacket) Set(tp *Packet) {
 	ident := tp.Header.FileIdent
 	if _, ok := b.DataSegments[ident]; ok {
+		fmt.Println("無駄パケット", ident)
 		return
 	}
 	b.DataSegments[ident] = tp.Data

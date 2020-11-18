@@ -52,21 +52,22 @@ func (p *Packet) Deserialize(buf []byte) error {
 // 受け取ったパケットからファイルを再構築する
 type BuilderFromPacket struct {
 	DataSegments map[FileIdent][]byte
-	CurrentReceivedFileSize map[int16]int
+	CurrentReceivedFileSize map[int16]int	// ファイルごとの送られてきたサイズ
 }
 
 func (b *BuilderFromPacket) Set(tp *Packet) {
 	ident := tp.Header.FileIdent
 	if _, ok := b.DataSegments[ident]; ok {
+		//fmt.Println("無駄パケット", ident)
 		return
 	}
+	//fmt.Println("not無駄パケット", ident)
 	b.DataSegments[ident] = tp.Data
-	fileNum := ident.Fileno
-	if _, ok := b.CurrentReceivedFileSize[fileNum]; !ok {
-		b.CurrentReceivedFileSize[fileNum] = 0
+	if _, ok := b.CurrentReceivedFileSize[ident.Fileno]; !ok {
+		b.CurrentReceivedFileSize[ident.Fileno] = 0
 	}
-	b.CurrentReceivedFileSize[fileNum] += int(tp.Header.Length)
-	if b.CurrentReceivedFileSize[fileNum] >= filesize {
+	b.CurrentReceivedFileSize[ident.Fileno] += int(tp.Header.Length)
+	if b.CurrentReceivedFileSize[ident.Fileno] >= filesize {
 		b.WriteFile(ident.Fileno)
 	}
 }

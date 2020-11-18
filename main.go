@@ -48,9 +48,8 @@ func client() {
 	go c.Send()
 
 	go c.Receive()
-	go c.HandleAck()
 
-	time.Sleep(60)
+	time.Sleep(time.Second * 60)
 }
 
 

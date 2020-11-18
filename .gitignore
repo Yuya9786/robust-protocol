@@ -2,3 +2,4 @@ main
 *.txt
 data/*
 data2/*
+.idea/*

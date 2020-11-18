@@ -46,7 +46,7 @@ func (p *Packet) Deserialize(buf []byte) error {
 		return err
 	}
 	p.Header = header
-	p.Data = buf[8:]
+	p.Data = buf[12:]
 	return nil
 }
 

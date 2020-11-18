@@ -165,7 +165,10 @@ func (s *Server) handleClient() {
 	for {
 		buf := <- s.Ch
 		var packet Packet
-		packet.Deserialize(buf)
+		err := packet.Deserialize(buf)
+		if err != nil {
+			panic(err)
+		}
 		s.Bfp.Set(&packet)
 		s.Ack(&packet)
 	}

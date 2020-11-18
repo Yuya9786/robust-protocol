@@ -1,4 +1,4 @@
-rbp
+./rbp
 *.txt
 data/*
 data2/*

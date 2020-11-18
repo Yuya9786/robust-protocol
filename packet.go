@@ -61,6 +61,7 @@ func (b *BuilderFromPacket) Set(tp *Packet) {
 		fmt.Println("無駄パケット", ident)
 		return
 	}
+	fmt.Println("not無駄パケット", ident)
 	b.DataSegments[ident] = tp.Data
 	if _, ok := b.CurrentReceivedFileSize[ident.Fileno]; !ok {
 		b.CurrentReceivedFileSize[ident.Fileno] = 0

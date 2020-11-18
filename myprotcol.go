@@ -165,6 +165,7 @@ func (s *Server) handleClient() {
 	for {
 		buf := <- s.Ch
 		var packet Packet
+		fmt.Println(buf)
 		err := packet.Deserialize(buf)
 		if err != nil {
 			panic(err)

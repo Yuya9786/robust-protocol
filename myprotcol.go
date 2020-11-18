@@ -1,8 +1,6 @@
 package main
 
 import (
-	"bytes"
-	"encoding/binary"
 	"fmt"
 	"io/ioutil"
 	"net"
@@ -14,7 +12,8 @@ type Client struct {
 	Ch1 chan *FileIdent
 	Ch2 chan *FileIdent
 	RetransCtrl *RetransCtrl
-	Buf [][][]byte
+	Buf [][]*Packet
+	window *WindowManager
 }
 
 type Server struct {
@@ -34,9 +33,9 @@ func (c *Client) Initialize(dstAddr string, srcAddr string) {
 	c.Ch2 = make(chan *FileIdent, 70000)
 	c.RetransCtrl = &RetransCtrl {
 		v: make(map[FileIdent]bool),
-		newest: make(map[int16]int16),
 	}
-	c.Buf = make([][][]byte, 1000)
+	c.Buf = make([][]*Packet, 1000)
+	c.window = NewWindowManager()
 }
 
 func (c *Client) Send() {
@@ -47,18 +46,29 @@ func (c *Client) Send() {
 				if c.Read(packetIdent) {
 					continue
 				}
-				c.Conn.Write(c.Buf[packetIdent.Fileno][packetIdent.Offset])
-				//fmt.Println("2", packetIdent)
-				c.Ch2 <- packetIdent
+				transID := c.window.push(packetIdent)
+				packet := c.Buf[packetIdent.Fileno][packetIdent.Offset]
+				packet.Header.transID = transID
+				data, err := packet.Serialize()
+				if err != nil {
+					panic(err)
+				}
+
+				c.Conn.Write(data)
+
 			case packetIdent = <- c.Ch1:
 				if c.Read(packetIdent) {
 					continue
 				}
-				c.Conn.Write(c.Buf[packetIdent.Fileno][packetIdent.Offset])
-				//fmt.Println("1", packetIdent)
-				if packetIdent.Offset >= 69 {
-					c.Ch1 <- packetIdent
+				transID := c.window.push(packetIdent)
+				packet := c.Buf[packetIdent.Fileno][packetIdent.Offset]
+				packet.Header.transID = transID
+				data, err := packet.Serialize()
+				if err != nil {
+					panic(err)
 				}
+
+				c.Conn.Write(data)
 		}
 	}
 }
@@ -92,15 +102,12 @@ func (c *Client) ReadFile() {
 					Length:    dataSize,
 					Space:     0,
 					FileIdent: fileIdent,
+					transID: 0,
 				},
 				Data: packetData,
 			}
-			data, err := packet.Serialize()
-			if err != nil {
-				panic(err)
-			}
 			j++
-			c.Buf[i] = append(c.Buf[i], data)
+			c.Buf[i] = append(c.Buf[i], packet)
 			c.Ch1 <- &fileIdent
 		}
 
@@ -120,16 +127,8 @@ func (c *Client) Receive() {
 			return
 		}
 
-		var fileNo, offSet int16
-		data := bytes.NewReader(buf[4:6])
-		binary.Read(data, binary.BigEndian, &fileNo)
-		data = bytes.NewReader(buf[6:8])
-		binary.Read(data, binary.BigEndian, &offSet)
-		ackIdent := FileIdent{
-			Fileno: fileNo,
-			Offset: offSet,
-		}
-		c.Ack(&ackIdent)
+		var transID uint32
+		c.AckSegment(transID)
 	}
 }
 
@@ -200,7 +199,6 @@ func (s *Server) Ack(receivedPacket *Packet) {
 type RetransCtrl struct {
 	mu sync.Mutex
 	v map[FileIdent]bool
-	newest map[int16]int16
 }
 
 func (c *Client) Set(ident *FileIdent) {
@@ -214,46 +212,4 @@ func (c *Client) Read(ident *FileIdent) bool {
 	b := c.RetransCtrl.v[*ident]
 	c.RetransCtrl.mu.Unlock()
 	return b
-}
-
-func (c *Client) Ack(ident *FileIdent) {
-	c.RetransCtrl.mu.Lock()
-
-	// 既にACKが来ているかチェック，来ていれば捨てる
-	if c.RetransCtrl.v[*ident] {
-		//fmt.Println("Drop Ack ", ident)
-		c.RetransCtrl.mu.Unlock()
-		return
-	}
-
-	//fmt.Println("ACK: ", ident)
-	var i int16
-	if _, ok := c.RetransCtrl.newest[ident.Fileno]; !ok {
-		// そのファイルの中で初めてACKが返ってきた場合
-		c.RetransCtrl.newest[ident.Fileno] = ident.Offset
-		i = 0
-	} else {
-		i = c.RetransCtrl.newest[ident.Fileno]
-		if i >= ident.Offset {
-			// 既に受け取ったACKのオフセットよりも小さい場合
-			c.RetransCtrl.v[*ident] = true
-			c.RetransCtrl.mu.Unlock()
-			return
-		}
-		c.RetransCtrl.newest[ident.Fileno] = ident.Offset
-	}
-
-	for ; i<ident.Offset; i++ {
-		tmpIdent := &FileIdent{
-			Fileno: ident.Fileno,
-			Offset: i,
-		}
-		if c.RetransCtrl.v[*tmpIdent] {
-			continue
-		}
-		//fmt.Println("失敗: ", tmpIdent)
-		c.Ch2 <- tmpIdent
-	}
-	c.RetransCtrl.v[*ident] = true
-	c.RetransCtrl.mu.Unlock()
 }

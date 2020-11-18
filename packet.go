@@ -17,6 +17,7 @@ type Header struct {
 	Length int16
 	Space int8
 	FileIdent FileIdent
+	transID uint32
 }
 
 type Packet struct {

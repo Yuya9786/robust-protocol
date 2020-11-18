@@ -1,4 +1,4 @@
-SRCS = main.go myprotcol.go packet.go udp.go
+SRCS = *.go
 TARO = 169.254.155.219:8888
 HANAKO = 169.254.229.153:8888
 CMD = ./rbp

@@ -43,22 +43,28 @@ func (c *Client) Send() {
 	for {
 		var packetIdent *FileIdent
 		select {
-			case packetIdent = <- c.Ch2:
-				if c.Read(packetIdent) {
-					continue
-				}
-				c.Conn.Write(c.Buf[packetIdent.Fileno][packetIdent.Offset])
-				//fmt.Println("2", packetIdent)
-				c.Ch2 <- packetIdent
-			case packetIdent = <- c.Ch1:
-				if c.Read(packetIdent) {
-					continue
-				}
-				c.Conn.Write(c.Buf[packetIdent.Fileno][packetIdent.Offset])
-				//fmt.Println("1", packetIdent)
-				if packetIdent.Offset >= 69 {
-					c.Ch1 <- packetIdent
-				}
+		case packetIdent = <-c.Ch2:
+			if c.Read(packetIdent) {
+				continue
+			}
+			c.Conn.Write(c.Buf[packetIdent.Fileno][packetIdent.Offset])
+			//fmt.Println("2", packetIdent)
+			c.Ch2 <- packetIdent
+			continue
+		default:
+		}
+
+		select {
+		case packetIdent = <- c.Ch1:
+			if c.Read(packetIdent) {
+				continue
+			}
+			c.Conn.Write(c.Buf[packetIdent.Fileno][packetIdent.Offset])
+			//fmt.Println("1", packetIdent)
+			if packetIdent.Offset >= 69 {
+				c.Ch1 <- packetIdent
+			}
+		default:
 		}
 	}
 }

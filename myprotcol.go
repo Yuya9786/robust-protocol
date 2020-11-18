@@ -31,7 +31,7 @@ func (c *Client) Initialize(dstAddr string, srcAddr string) {
 
 	c.Conn = conn
 	c.Ch1 = make(chan *FileIdent, 70000)	// チャネルが短いとうまく動かない場合あり
-	c.Ch2 = make(chan *FileIdent, 2000)
+	c.Ch2 = make(chan *FileIdent, 70000)
 	c.RetransCtrl = &RetransCtrl {
 		v: make(map[*FileIdent]bool),
 		newest: make(map[int16]int16),

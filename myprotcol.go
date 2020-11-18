@@ -219,6 +219,14 @@ func (c *Client) Read(ident *FileIdent) bool {
 
 func (c *Client) Ack(ident *FileIdent) {
 	c.RetransCtrl.mu.Lock()
+
+	// 既にACKが来ているかチェック，来ていれば捨てる
+	if c.RetransCtrl.v[ident] {
+		c.RetransCtrl.mu.Unlock()
+		return
+	}
+
+	fmt.Println("ACK: ", ident)
 	var i int16
 	if _, ok := c.RetransCtrl.newest[ident.Fileno]; !ok {
 		// そのファイルの中で初めてACKが返ってきた場合
@@ -226,9 +234,15 @@ func (c *Client) Ack(ident *FileIdent) {
 		i = 0
 	} else {
 		i = c.RetransCtrl.newest[ident.Fileno]
+		if i >= ident.Offset {
+			// 既に受け取ったACKのオフセットよりも小さい場合
+			c.RetransCtrl.v[ident] = true
+			c.RetransCtrl.mu.Unlock()
+			return
+		}
 		c.RetransCtrl.newest[ident.Fileno] = ident.Offset
 	}
-	fmt.Println("ACK: ", ident)
+
 	for ; i<ident.Offset; i++ {
 		tmpIdent := &FileIdent{
 			Fileno: ident.Fileno,

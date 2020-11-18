@@ -44,6 +44,7 @@ func (p *Packet) Deserialize(buf []byte) error {
 	var header Header
 	reader := bytes.NewReader(buf)
 	if err := binary.Read(reader, binary.BigEndian, &header); err != nil {
+		fmt.Println("c")
 		return err
 	}
 	p.Header = header

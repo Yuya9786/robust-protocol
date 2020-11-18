@@ -33,7 +33,7 @@ func (wm *WindowManager) push(segment *FileIdent) uint32  {
 func (c *Client) AckSegment(transID uint32) {
 	fmt.Println(transID)
 	idxWindow := int(transID) - int(c.window.transHead)
-	if idxWindow >=0 && idxWindow < len(c.window.window) && !c.window.window[transID].ack {
+	if idxWindow >=0 && idxWindow < len(c.window.window) && !c.window.window[idxWindow].ack {
 		c.window.window[transID].ack = true
 	}
 

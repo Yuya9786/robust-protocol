@@ -65,7 +65,6 @@ func (b *BuilderFromPacket) Set(tp *Packet) {
 		b.CurrentReceivedFileSize[ident.Fileno] = 0
 	}
 	b.CurrentReceivedFileSize[ident.Fileno] += int(tp.Header.Length)
-	fmt.Println(ident.Fileno, b.CurrentReceivedFileSize[ident.Fileno])
 	if b.CurrentReceivedFileSize[ident.Fileno] >= filesize {
 		b.WriteFile(ident.Fileno)
 	}

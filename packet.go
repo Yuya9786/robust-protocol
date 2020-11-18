@@ -58,10 +58,10 @@ type BuilderFromPacket struct {
 func (b *BuilderFromPacket) Set(tp *Packet) {
 	ident := tp.Header.FileIdent
 	if _, ok := b.DataSegments[ident]; ok {
-		fmt.Println("無駄パケット", ident)
+		//fmt.Println("無駄パケット", ident)
 		return
 	}
-	fmt.Println("not無駄パケット", ident)
+	//fmt.Println("not無駄パケット", ident)
 	b.DataSegments[ident] = tp.Data
 	if _, ok := b.CurrentReceivedFileSize[ident.Fileno]; !ok {
 		b.CurrentReceivedFileSize[ident.Fileno] = 0

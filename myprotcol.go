@@ -233,6 +233,9 @@ func (c *Client) Ack(ident *FileIdent) {
 			Fileno: ident.Fileno,
 			Offset: i,
 		}
+		if c.RetransCtrl.v[tmpIdent] {
+			continue
+		}
 		fmt.Println("失敗: ", tmpIdent)
 		c.Ch2 <- tmpIdent
 	}
